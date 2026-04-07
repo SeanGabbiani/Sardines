@@ -2,8 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Triangle Swarm</title>
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+  />
+  <title>Triangle Swarm Lab</title>
   <style>
     html, body {
       margin: 0;
@@ -17,45 +20,202 @@
       display: block;
     }
 
-    .hud {
+    .panel {
       position: fixed;
       top: 14px;
       left: 14px;
-      z-index: 10;
-      color: rgba(255,255,255,0.8);
+      z-index: 20;
+      color: rgba(255,255,255,0.9);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 13px;
-      line-height: 1.4;
-      background: rgba(0,0,0,0.25);
-      padding: 10px 12px;
-      border-radius: 12px;
-      backdrop-filter: blur(6px);
+      line-height: 1.35;
+      background: rgba(0,0,0,0.28);
+      padding: 12px 14px;
+      border-radius: 14px;
+      backdrop-filter: blur(8px);
+      min-width: 240px;
+    }
+
+    .panel h1 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .row {
+      margin: 8px 0;
+    }
+
+    .row label {
+      display: block;
+      margin-bottom: 4px;
+      opacity: 0.9;
+    }
+
+    .panel select,
+    .panel input[type="range"],
+    .panel button {
+      width: 100%;
+      box-sizing: border-box;
+      border-radius: 10px;
+      border: none;
+      font: inherit;
+    }
+
+    .panel select,
+    .panel button {
+      padding: 8px 10px;
+      background: rgba(255,255,255,0.1);
+      color: white;
+    }
+
+    .panel input[type="range"] {
+      background: transparent;
+    }
+
+    .mini {
+      font-size: 11px;
+      opacity: 0.7;
+      margin-top: 8px;
+    }
+
+    .toggle {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      z-index: 25;
+      border: none;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.28);
+      color: rgba(255,255,255,0.9);
+      backdrop-filter: blur(8px);
+      width: 42px;
+      height: 42px;
+      font-size: 18px;
+    }
+
+    .hidden {
+      display: none;
     }
   </style>
 </head>
 <body>
   <canvas id="canvas"></canvas>
 
-  <div class="hud">
-    Tap / click to generate triangles<br>
-    Press C to clear
+  <button class="toggle" id="togglePanel">☰</button>
+
+  <div class="panel" id="panel">
+    <h1>Triangle Swarm Lab</h1>
+
+    <div class="row">
+      <label for="pathSelect">Attractor path</label>
+      <select id="pathSelect">
+        <option value="circle">Circle</option>
+        <option value="figure8">Figure Eight</option>
+        <option value="lissajous" selected>Lissajous</option>
+        <option value="torusish">Torus-ish</option>
+        <option value="chaotic">Chaotic Loop</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <label for="spawnCount">Spawn count: <span id="spawnCountValue">100</span></label>
+      <input id="spawnCount" type="range" min="20" max="220" step="1" value="100" />
+    </div>
+
+    <div class="row">
+      <label for="attractStrength">Attraction: <span id="attractStrengthValue">1.8</span></label>
+      <input id="attractStrength" type="range" min="0.4" max="4" step="0.1" value="1.8" />
+    </div>
+
+    <div class="row">
+      <label for="flowStrength">Flow: <span id="flowStrengthValue">1.8</span></label>
+      <input id="flowStrength" type="range" min="0.2" max="4" step="0.1" value="1.8" />
+    </div>
+
+    <div class="row">
+      <label for="trailAmount">Trail: <span id="trailAmountValue">0.14</span></label>
+      <input id="trailAmount" type="range" min="0.03" max="0.35" step="0.01" value="0.14" />
+    </div>
+
+    <div class="row">
+      <button id="clearBtn">Clear</button>
+    </div>
+
+    <div class="mini">
+      Tap to generate triangles. Change path live and watch the swarm reorganize.
+    </div>
   </div>
 
   <script>
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
 
+    const panel = document.getElementById("panel");
+    const togglePanel = document.getElementById("togglePanel");
+
+    const pathSelect = document.getElementById("pathSelect");
+    const spawnCountSlider = document.getElementById("spawnCount");
+    const attractStrengthSlider = document.getElementById("attractStrength");
+    const flowStrengthSlider = document.getElementById("flowStrength");
+    const trailAmountSlider = document.getElementById("trailAmount");
+    const clearBtn = document.getElementById("clearBtn");
+
+    const spawnCountValue = document.getElementById("spawnCountValue");
+    const attractStrengthValue = document.getElementById("attractStrengthValue");
+    const flowStrengthValue = document.getElementById("flowStrengthValue");
+    const trailAmountValue = document.getElementById("trailAmountValue");
+
     let width = 0;
     let height = 0;
     let dpr = Math.min(window.devicePixelRatio || 1, 2);
 
     const particles = [];
-    const maxParticles = 3000;
+    const maxParticles = 3500;
 
-    // Hidden target shape: a circle in the middle
     let centerX = 0;
     let centerY = 0;
-    let targetRadius = 0;
+    let scaleBase = 0;
+
+    const settings = {
+      path: "lissajous",
+      spawnCount: 100,
+      attractStrength: 1.8,
+      flowStrength: 1.8,
+      trailAmount: 0.14
+    };
+
+    togglePanel.addEventListener("click", () => {
+      panel.classList.toggle("hidden");
+    });
+
+    pathSelect.addEventListener("input", () => {
+      settings.path = pathSelect.value;
+    });
+
+    spawnCountSlider.addEventListener("input", () => {
+      settings.spawnCount = Number(spawnCountSlider.value);
+      spawnCountValue.textContent = settings.spawnCount;
+    });
+
+    attractStrengthSlider.addEventListener("input", () => {
+      settings.attractStrength = Number(attractStrengthSlider.value);
+      attractStrengthValue.textContent = settings.attractStrength.toFixed(1);
+    });
+
+    flowStrengthSlider.addEventListener("input", () => {
+      settings.flowStrength = Number(flowStrengthSlider.value);
+      flowStrengthValue.textContent = settings.flowStrength.toFixed(1);
+    });
+
+    trailAmountSlider.addEventListener("input", () => {
+      settings.trailAmount = Number(trailAmountSlider.value);
+      trailAmountValue.textContent = settings.trailAmount.toFixed(2);
+    });
+
+    clearBtn.addEventListener("click", () => {
+      particles.length = 0;
+    });
 
     function resize() {
       width = window.innerWidth;
@@ -71,7 +231,101 @@
 
       centerX = width / 2;
       centerY = height / 2;
-      targetRadius = Math.min(width, height) * 0.24;
+      scaleBase = Math.min(width, height) * 0.23;
+    }
+
+    function randomRange(min, max) {
+      return min + Math.random() * (max - min);
+    }
+
+    function pathPoint(type, t) {
+      const s = scaleBase;
+
+      if (type === "circle") {
+        return {
+          x: centerX + Math.cos(t) * s,
+          y: centerY + Math.sin(t) * s
+        };
+      }
+
+      if (type === "figure8") {
+        return {
+          x: centerX + Math.sin(t) * s * 0.95,
+          y: centerY + Math.sin(2 * t) * s * 0.75
+        };
+      }
+
+      if (type === "lissajous") {
+        return {
+          x: centerX + Math.sin(3 * t + 0.8) * s * 0.95,
+          y: centerY + Math.sin(4 * t) * s * 0.80
+        };
+      }
+
+      if (type === "torusish") {
+        const r = s * (0.72 + 0.24 * Math.cos(3 * t));
+        return {
+          x: centerX + Math.cos(2 * t) * r,
+          y: centerY + Math.sin(2 * t) * r
+        };
+      }
+
+      if (type === "chaotic") {
+        return {
+          x: centerX + (
+            0.62 * Math.sin(2.1 * t) +
+            0.23 * Math.sin(5.3 * t + 1.2) +
+            0.15 * Math.sin(9.1 * t)
+          ) * s * 1.05,
+          y: centerY + (
+            0.58 * Math.cos(3.2 * t + 0.4) +
+            0.22 * Math.sin(6.4 * t) +
+            0.16 * Math.cos(8.2 * t + 0.6)
+          ) * s * 0.95
+        };
+      }
+
+      return {
+        x: centerX + Math.cos(t) * s,
+        y: centerY + Math.sin(t) * s
+      };
+    }
+
+    function nearestPathData(type, x, y) {
+      let bestT = 0;
+      let bestD2 = Infinity;
+      let bestPoint = null;
+
+      const samples = 220;
+
+      for (let i = 0; i < samples; i++) {
+        const t = (i / samples) * Math.PI * 2;
+        const p = pathPoint(type, t);
+        const dx = p.x - x;
+        const dy = p.y - y;
+        const d2 = dx * dx + dy * dy;
+
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          bestT = t;
+          bestPoint = p;
+        }
+      }
+
+      const eps = 0.01;
+      const p1 = pathPoint(type, bestT - eps);
+      const p2 = pathPoint(type, bestT + eps);
+
+      const tx = p2.x - p1.x;
+      const ty = p2.y - p1.y;
+      const len = Math.hypot(tx, ty) || 1;
+
+      return {
+        point: bestPoint,
+        tangentX: tx / len,
+        tangentY: ty / len,
+        distance: Math.sqrt(bestD2)
+      };
     }
 
     class TriangleParticle {
@@ -93,61 +347,53 @@
         this.turnAmount = 0;
 
         this.hueOffset = randomRange(-20, 20);
+        this.pathOffset = randomRange(-1, 1);
       }
 
       update() {
         this.age += 1;
-
-        // Reset acceleration
         this.ax = 0;
         this.ay = 0;
 
-        // Phase 1: initial expansion burst fades with age
         const burstStrength = Math.max(0, 1 - this.age / 45);
         const burstAngle = Math.atan2(this.vy, this.vx);
         this.ax += Math.cos(burstAngle) * burstStrength * 0.03;
         this.ay += Math.sin(burstAngle) * burstStrength * 0.03;
 
-        // Phase 2: after a short delay, get gently attracted to a circle
         if (this.age > 20) {
-          const dx = this.x - centerX;
-          const dy = this.y - centerY;
-          const dist = Math.hypot(dx, dy) || 0.0001;
+          const data = nearestPathData(settings.path, this.x, this.y);
+          const pullX = data.point.x - this.x;
+          const pullY = data.point.y - this.y;
 
-          // Nearest point on the hidden circle
-          const nearestX = centerX + (dx / dist) * targetRadius;
-          const nearestY = centerY + (dy / dist) * targetRadius;
+          const attract = settings.attractStrength * 0.001;
+          const flow = settings.flowStrength * 0.01;
 
-          const pullX = nearestX - this.x;
-          const pullY = nearestY - this.y;
+          this.ax += pullX * attract;
+          this.ay += pullY * attract;
 
-          this.ax += pullX * 0.0018;
-          this.ay += pullY * 0.0018;
+          this.ax += data.tangentX * flow;
+          this.ay += data.tangentY * flow;
 
-          // Tangential flow around the circle to make it feel alive
-          const tangentX = -dy / dist;
-          const tangentY = dx / dist;
-          this.ax += tangentX * 0.018;
-          this.ay += tangentY * 0.018;
+          const nx = -data.tangentY;
+          const ny = data.tangentX;
+          const orbitStrength = 0.0035 + 0.001 * this.pathOffset;
+
+          this.ax += nx * orbitStrength;
+          this.ay += ny * orbitStrength;
         }
 
-        // Tiny noise/wobble so it doesn’t feel mechanical
         this.ax += randomRange(-0.006, 0.006);
         this.ay += randomRange(-0.006, 0.006);
 
-        // Apply acceleration
         this.vx += this.ax;
         this.vy += this.ay;
 
-        // Drag
         this.vx *= 0.985;
         this.vy *= 0.985;
 
-        // Move
         this.x += this.vx;
         this.y += this.vy;
 
-        // Heading / turn measurement
         const newHeading = Math.atan2(this.vy, this.vx);
         let delta = newHeading - this.heading;
 
@@ -161,12 +407,10 @@
       draw() {
         const speed = Math.hypot(this.vx, this.vy);
 
-        // Fade in and out
         const fadeIn = Math.min(1, this.age / 20);
         const fadeOut = Math.max(0, 1 - this.age / this.maxAge);
         const alpha = fadeIn * fadeOut * 0.9;
 
-        // Color responds to turning and speed
         const hue = 200 + Math.min(this.turnAmount * 1200, 120) + this.hueOffset;
         const lightness = 55 + Math.min(speed * 8, 20);
 
@@ -191,7 +435,7 @@
       }
     }
 
-    function spawnBurst(x, y, count = 90) {
+    function spawnBurst(x, y, count = settings.spawnCount) {
       for (let i = 0; i < count; i++) {
         if (particles.length >= maxParticles) {
           particles.shift();
@@ -203,21 +447,31 @@
       }
     }
 
-    function randomRange(min, max) {
-      return min + Math.random() * (max - min);
-    }
-
-    function animate() {
-      // Slight transparency creates motion trails
-      ctx.fillStyle = "rgba(5, 6, 10, 0.14)";
-      ctx.fillRect(0, 0, width, height);
-
-      // Optional guide: faint hidden circle
+    function drawGuidePath() {
       ctx.beginPath();
-      ctx.arc(centerX, centerY, targetRadius, 0, Math.PI * 2);
+
+      const steps = 340;
+      for (let i = 0; i <= steps; i++) {
+        const t = (i / steps) * Math.PI * 2;
+        const p = pathPoint(settings.path, t);
+
+        if (i === 0) {
+          ctx.moveTo(p.x, p.y);
+        } else {
+          ctx.lineTo(p.x, p.y);
+        }
+      }
+
       ctx.strokeStyle = "rgba(255,255,255,0.03)";
       ctx.lineWidth = 1;
       ctx.stroke();
+    }
+
+    function animate() {
+      ctx.fillStyle = `rgba(5, 6, 10, ${settings.trailAmount})`;
+      ctx.fillRect(0, 0, width, height);
+
+      drawGuidePath();
 
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
@@ -239,6 +493,7 @@
           y: event.touches[0].clientY
         };
       }
+
       return {
         x: event.clientX,
         y: event.clientY
@@ -246,13 +501,13 @@
     }
 
     canvas.addEventListener("pointerdown", (event) => {
-      spawnBurst(event.clientX, event.clientY, 100);
+      spawnBurst(event.clientX, event.clientY, settings.spawnCount);
     });
 
     canvas.addEventListener("touchstart", (event) => {
       event.preventDefault();
       const pos = getPointerPosition(event);
-      spawnBurst(pos.x, pos.y, 100);
+      spawnBurst(pos.x, pos.y, settings.spawnCount);
     }, { passive: false });
 
     window.addEventListener("keydown", (event) => {
@@ -265,8 +520,6 @@
 
     resize();
     animate();
-
-    // Start with one burst in the middle
     spawnBurst(centerX, centerY, 140);
   </script>
 </body>

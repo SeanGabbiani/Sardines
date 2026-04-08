@@ -25,7 +25,7 @@
       top: 14px;
       left: 14px;
       z-index: 20;
-      color: rgba(255,255,255,0.9);
+      color: rgba(255,255,255,0.92);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 13px;
       line-height: 1.35;
@@ -33,7 +33,8 @@
       padding: 12px 14px;
       border-radius: 14px;
       backdrop-filter: blur(8px);
-      min-width: 240px;
+      min-width: 250px;
+      max-width: 300px;
     }
 
     .panel h1 {
@@ -49,7 +50,7 @@
     .row label {
       display: block;
       margin-bottom: 4px;
-      opacity: 0.9;
+      opacity: 0.92;
     }
 
     .panel select,
@@ -75,7 +76,7 @@
 
     .mini {
       font-size: 11px;
-      opacity: 0.7;
+      opacity: 0.72;
       margin-top: 8px;
     }
 
@@ -87,7 +88,7 @@
       border: none;
       border-radius: 999px;
       background: rgba(0,0,0,0.28);
-      color: rgba(255,255,255,0.9);
+      color: rgba(255,255,255,0.92);
       backdrop-filter: blur(8px);
       width: 42px;
       height: 42px;
@@ -97,12 +98,40 @@
     .hidden {
       display: none;
     }
+
+    .collapsed-panel {
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      z-index: 21;
+      background: rgba(0,0,0,0.28);
+      backdrop-filter: blur(8px);
+      border-radius: 999px;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .collapsed-panel.hidden {
+      display: none;
+    }
+
+    .collapsed-panel button {
+      border: none;
+      background: transparent;
+      color: rgba(255,255,255,0.92);
+      padding: 10px 14px;
+      font: inherit;
+    }
   </style>
 </head>
 <body>
   <canvas id="canvas"></canvas>
 
   <button class="toggle" id="togglePanel">☰</button>
+
+  <div class="collapsed-panel hidden" id="collapsedPanel">
+    <button id="openPanelBtn">Controls ▾</button>
+  </div>
 
   <div class="panel" id="panel">
     <h1>Triangle Swarm Lab</h1>
@@ -125,12 +154,12 @@
 
     <div class="row">
       <label for="attractStrength">Attraction: <span id="attractStrengthValue">1.8</span></label>
-      <input id="attractStrength" type="range" min="0.4" max="4" step="0.1" value="1.8" />
+      <input id="attractStrength" type="range" min="0.4" max="4.5" step="0.1" value="1.8" />
     </div>
 
     <div class="row">
       <label for="flowStrength">Flow: <span id="flowStrengthValue">1.8</span></label>
-      <input id="flowStrength" type="range" min="0.2" max="4" step="0.1" value="1.8" />
+      <input id="flowStrength" type="range" min="0.2" max="5" step="0.1" value="1.8" />
     </div>
 
     <div class="row">
@@ -143,7 +172,7 @@
     </div>
 
     <div class="mini">
-      Tap to generate triangles. Change path live and watch the swarm reorganize.
+      Tap to generate triangles. Collapse the panel when you want a clear view.
     </div>
   </div>
 
@@ -153,6 +182,8 @@
 
     const panel = document.getElementById("panel");
     const togglePanel = document.getElementById("togglePanel");
+    const collapsedPanel = document.getElementById("collapsedPanel");
+    const openPanelBtn = document.getElementById("openPanelBtn");
 
     const pathSelect = document.getElementById("pathSelect");
     const spawnCountSlider = document.getElementById("spawnCount");
@@ -171,7 +202,7 @@
     let dpr = Math.min(window.devicePixelRatio || 1, 2);
 
     const particles = [];
-    const maxParticles = 3500;
+    const maxParticles = 4200;
 
     let centerX = 0;
     let centerY = 0;
@@ -185,9 +216,25 @@
       trailAmount: 0.14
     };
 
+    function collapsePanel() {
+      panel.classList.add("hidden");
+      collapsedPanel.classList.remove("hidden");
+    }
+
+    function expandPanel() {
+      panel.classList.remove("hidden");
+      collapsedPanel.classList.add("hidden");
+    }
+
     togglePanel.addEventListener("click", () => {
-      panel.classList.toggle("hidden");
+      if (panel.classList.contains("hidden")) {
+        expandPanel();
+      } else {
+        collapsePanel();
+      }
     });
+
+    openPanelBtn.addEventListener("click", expandPanel);
 
     pathSelect.addEventListener("input", () => {
       settings.path = pathSelect.value;
@@ -236,6 +283,14 @@
 
     function randomRange(min, max) {
       return min + Math.random() * (max - min);
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function lerp(a, b, t) {
+      return a + (b - a) * t;
     }
 
     function pathPoint(type, t) {
@@ -296,7 +351,7 @@
       let bestD2 = Infinity;
       let bestPoint = null;
 
-      const samples = 220;
+      const samples = 240;
 
       for (let i = 0; i < samples; i++) {
         const t = (i / samples) * Math.PI * 2;
@@ -328,6 +383,25 @@
       };
     }
 
+    function estimatePathDensity(type, px, py) {
+      let count = 0;
+      const radius = 18;
+      const radius2 = radius * radius;
+
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        if (!p.pathProximity || p.pathProximity > 0.55) continue;
+
+        const dx = p.x - px;
+        const dy = p.y - py;
+        const d2 = dx * dx + dy * dy;
+
+        if (d2 < radius2) count++;
+      }
+
+      return clamp(count / 10, 0, 1);
+    }
+
     class TriangleParticle {
       constructor(x, y, angle, speed) {
         this.x = x;
@@ -341,13 +415,17 @@
 
         this.size = randomRange(3, 8);
         this.age = 0;
-        this.maxAge = randomRange(220, 420);
+        this.maxAge = randomRange(340, 620);
 
         this.heading = angle;
         this.turnAmount = 0;
 
         this.hueOffset = randomRange(-20, 20);
         this.pathOffset = randomRange(-1, 1);
+
+        this.pathProximity = 0;
+        this.onPathEase = 0;
+        this.flowBoost = 0;
       }
 
       update() {
@@ -355,41 +433,52 @@
         this.ax = 0;
         this.ay = 0;
 
-        const burstStrength = Math.max(0, 1 - this.age / 45);
+        const burstStrength = Math.max(0, 1 - this.age / 55);
         const burstAngle = Math.atan2(this.vy, this.vx);
-        this.ax += Math.cos(burstAngle) * burstStrength * 0.03;
-        this.ay += Math.sin(burstAngle) * burstStrength * 0.03;
+        this.ax += Math.cos(burstAngle) * burstStrength * 0.028;
+        this.ay += Math.sin(burstAngle) * burstStrength * 0.028;
 
         if (this.age > 20) {
           const data = nearestPathData(settings.path, this.x, this.y);
           const pullX = data.point.x - this.x;
           const pullY = data.point.y - this.y;
 
-          const attract = settings.attractStrength * 0.001;
-          const flow = settings.flowStrength * 0.01;
+          const normalizedDistance = clamp(data.distance / 60, 0, 1);
+          this.pathProximity = 1 - normalizedDistance;
 
+          const targetOnPathEase = this.pathProximity > 0.55 ? 1 : 0;
+          this.onPathEase = lerp(this.onPathEase, targetOnPathEase, 0.035);
+
+          const attract = settings.attractStrength * 0.001;
           this.ax += pullX * attract;
           this.ay += pullY * attract;
 
-          this.ax += data.tangentX * flow;
-          this.ay += data.tangentY * flow;
+          this.flowBoost = lerp(this.flowBoost, this.onPathEase, 0.02);
+          const calmFlow = settings.flowStrength * 0.006;
+          const fastFlow = settings.flowStrength * 0.018;
+          const currentFlow = lerp(calmFlow, fastFlow, this.flowBoost);
+
+          this.ax += data.tangentX * currentFlow;
+          this.ay += data.tangentY * currentFlow;
 
           const nx = -data.tangentY;
           const ny = data.tangentX;
-          const orbitStrength = 0.0035 + 0.001 * this.pathOffset;
+          const orbitStrength = 0.0032 + 0.001 * this.pathOffset;
 
           this.ax += nx * orbitStrength;
           this.ay += ny * orbitStrength;
         }
 
-        this.ax += randomRange(-0.006, 0.006);
-        this.ay += randomRange(-0.006, 0.006);
+        this.ax += randomRange(-0.0055, 0.0055);
+        this.ay += randomRange(-0.0055, 0.0055);
 
         this.vx += this.ax;
         this.vy += this.ay;
 
-        this.vx *= 0.985;
-        this.vy *= 0.985;
+        const dragBase = 0.985;
+        const pathDrag = lerp(dragBase, 0.992, this.flowBoost);
+        this.vx *= pathDrag;
+        this.vy *= pathDrag;
 
         this.x += this.vx;
         this.y += this.vy;
@@ -407,12 +496,24 @@
       draw() {
         const speed = Math.hypot(this.vx, this.vy);
 
-        const fadeIn = Math.min(1, this.age / 20);
+        const fadeIn = Math.min(1, this.age / 24);
         const fadeOut = Math.max(0, 1 - this.age / this.maxAge);
-        const alpha = fadeIn * fadeOut * 0.9;
+        const alpha = fadeIn * fadeOut * 0.92;
+
+        const densityWhiten = estimatePathDensity(settings.path, this.x, this.y);
+        const whitenAmount = clamp(
+          this.pathProximity * 0.7 + densityWhiten * 0.55,
+          0,
+          1
+        );
 
         const hue = 200 + Math.min(this.turnAmount * 1200, 120) + this.hueOffset;
-        const lightness = 55 + Math.min(speed * 8, 20);
+        const saturation = lerp(85, 0, whitenAmount);
+        const lightness = lerp(
+          55 + Math.min(speed * 8, 20),
+          100,
+          whitenAmount
+        );
 
         ctx.save();
         ctx.translate(this.x, this.y);
@@ -424,7 +525,7 @@
         ctx.lineTo(-this.size * 0.8, -this.size * 0.5);
         ctx.closePath();
 
-        ctx.fillStyle = `hsla(${hue}, 85%, ${lightness}%, ${alpha})`;
+        ctx.fillStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
         ctx.fill();
 
         ctx.restore();
@@ -450,7 +551,7 @@
     function drawGuidePath() {
       ctx.beginPath();
 
-      const steps = 340;
+      const steps = 360;
       for (let i = 0; i <= steps; i++) {
         const t = (i / steps) * Math.PI * 2;
         const p = pathPoint(settings.path, t);
@@ -520,7 +621,7 @@
 
     resize();
     animate();
-    spawnBurst(centerX, centerY, 140);
+    spawnBurst(centerX, centerY, 160);
   </script>
 </body>
 </html>

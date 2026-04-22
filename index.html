@@ -6,7 +6,7 @@
     name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
   />
-  <title>Triangle Sphere Swarm 3D</title>
+  <title>3D Sphere Swarm</title>
   <style>
     html, body {
       margin: 0;
@@ -71,58 +71,10 @@
       opacity: 0.72;
       margin-top: 8px;
     }
-
-    .toggle {
-      position: fixed;
-      top: 14px;
-      right: 14px;
-      z-index: 25;
-      border: none;
-      border-radius: 999px;
-      background: rgba(0,0,0,0.28);
-      color: rgba(255,255,255,0.92);
-      backdrop-filter: blur(8px);
-      width: 42px;
-      height: 42px;
-      font-size: 18px;
-    }
-
-    .hidden {
-      display: none;
-    }
-
-    .collapsed-panel {
-      position: fixed;
-      top: 14px;
-      left: 14px;
-      z-index: 21;
-      background: rgba(0,0,0,0.28);
-      backdrop-filter: blur(8px);
-      border-radius: 999px;
-      overflow: hidden;
-    }
-
-    .collapsed-panel.hidden {
-      display: none;
-    }
-
-    .collapsed-panel button {
-      border: none;
-      background: transparent;
-      color: rgba(255,255,255,0.92);
-      padding: 10px 14px;
-      font: inherit;
-    }
   </style>
 </head>
 <body>
-  <button class="toggle" id="togglePanel">☰</button>
-
-  <div class="collapsed-panel hidden" id="collapsedPanel">
-    <button id="openPanelBtn">Controls ▾</button>
-  </div>
-
-  <div class="panel" id="panel">
+  <div class="panel">
     <h1>3D Sphere Swarm</h1>
 
     <div class="row">
@@ -155,13 +107,8 @@
   </div>
 
   <script type="module">
-    import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
-    import { OrbitControls } from "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js";
-
-    const panel = document.getElementById("panel");
-    const togglePanel = document.getElementById("togglePanel");
-    const collapsedPanel = document.getElementById("collapsedPanel");
-    const openPanelBtn = document.getElementById("openPanelBtn");
+    import * as THREE from "https://threejs.org/build/three.module.js";
+    import { OrbitControls } from "https://threejs.org/examples/jsm/controls/OrbitControls.js";
 
     const spawnCountSlider = document.getElementById("spawnCount");
     const sphereRadiusSlider = document.getElementById("sphereRadius");
@@ -174,29 +121,12 @@
     const pullStrengthValue = document.getElementById("pullStrengthValue");
     const flowStrengthValue = document.getElementById("flowStrengthValue");
 
-    function collapsePanel() {
-      panel.classList.add("hidden");
-      collapsedPanel.classList.remove("hidden");
-    }
-
-    function expandPanel() {
-      panel.classList.remove("hidden");
-      collapsedPanel.classList.add("hidden");
-    }
-
-    togglePanel.addEventListener("click", () => {
-      if (panel.classList.contains("hidden")) expandPanel();
-      else collapsePanel();
-    });
-
-    openPanelBtn.addEventListener("click", expandPanel);
-
     const settings = {
       spawnCount: 80,
       sphereRadius: 5,
       pullStrength: 0.020,
       flowStrength: 0.020,
-      maxParticles: 2500
+      maxParticles: 1800
     };
 
     spawnCountSlider.addEventListener("input", () => {
@@ -220,13 +150,6 @@
       flowStrengthValue.textContent = settings.flowStrength.toFixed(3);
     });
 
-    clearBtn.addEventListener("click", () => {
-      for (const p of particles) {
-        scene.remove(p.mesh);
-      }
-      particles.length = 0;
-    });
-
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x05060a);
 
@@ -239,7 +162,7 @@
     camera.position.set(0, 0, 16);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
@@ -247,20 +170,20 @@
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
 
-    const ambient = new THREE.AmbientLight(0xffffff, 0.9);
-    scene.add(ambient);
+    scene.add(new THREE.AmbientLight(0xffffff, 1.0));
 
-    const guideSphereGeo = new THREE.SphereGeometry(5, 48, 48);
-    const guideSphereMat = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.04
-    });
-    const guideSphere = new THREE.Mesh(guideSphereGeo, guideSphereMat);
+    const guideSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(5, 40, 40),
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.05
+      })
+    );
     scene.add(guideSphere);
 
-    function createTriangleGeometry(size = 0.16) {
+    function createTriangleGeometry(size = 0.15) {
       const geometry = new THREE.BufferGeometry();
       const vertices = new Float32Array([
          size, 0, 0,
@@ -273,24 +196,19 @@
     }
 
     const sharedGeometry = createTriangleGeometry();
+    const particles = [];
 
     class Particle {
       constructor(position, velocity) {
         this.pos = position.clone();
         this.vel = velocity.clone();
         this.acc = new THREE.Vector3();
-
         this.age = 0;
         this.maxAge = 900 + Math.random() * 700;
-
-        this.pathEase = 0;
         this.flowBoost = 0;
 
-        const hue = 0.55 + (Math.random() - 0.5) * 0.08;
-        const color = new THREE.Color().setHSL(hue, 0.85, 0.65);
-
         this.material = new THREE.MeshBasicMaterial({
-          color,
+          color: new THREE.Color().setHSL(0.58 + (Math.random() - 0.5) * 0.08, 0.85, 0.65),
           transparent: true,
           opacity: 0.9,
           side: THREE.DoubleSide
@@ -305,156 +223,38 @@
         this.age += 1;
         this.acc.set(0, 0, 0);
 
-        const burstStrength = Math.max(0, 1 - this.age / 70);
+        const burst = Math.max(0, 1 - this.age / 70);
         if (this.vel.lengthSq() > 0.00001) {
-          this.acc.add(this.vel.clone().normalize().multiplyScalar(burstStrength * 0.01));
+          this.acc.add(this.vel.clone().normalize().multiplyScalar(burst * 0.01));
         }
 
-        const outward = this.pos.clone().normalize();
-        const dist = this.pos.length();
+        const dist = this.pos.length() || 0.0001;
+        const outward = this.pos.clone().divideScalar(dist);
         const radialError = settings.sphereRadius - dist;
 
         this.acc.add(outward.clone().multiplyScalar(radialError * settings.pullStrength));
 
-        const up = new THREE.Vector3(0, 1, 0);
-        let tangent = new THREE.Vector3().crossVectors(outward, up);
-
+        let tangent = new THREE.Vector3().crossVectors(outward, new THREE.Vector3(0, 1, 0));
         if (tangent.lengthSq() < 0.0001) {
           tangent = new THREE.Vector3().crossVectors(outward, new THREE.Vector3(1, 0, 0));
         }
-
         tangent.normalize();
 
         const proximity = 1 - Math.min(Math.abs(radialError) / 1.2, 1);
-        const targetEase = proximity > 0.55 ? 1 : 0;
-        this.pathEase += (targetEase - this.pathEase) * 0.03;
-        this.flowBoost += (this.pathEase - this.flowBoost) * 0.02;
+        this.flowBoost += (proximity - this.flowBoost) * 0.02;
 
         const calmFlow = settings.flowStrength * 0.5;
         const fastFlow = settings.flowStrength * 1.8;
         const flow = THREE.MathUtils.lerp(calmFlow, fastFlow, this.flowBoost);
 
-        const ripple = Math.sin(time * 1.4 + outward.y * 8.0 + Math.atan2(outward.z, outward.x) * 3.0);
-        const rippleFlow = tangent.clone().multiplyScalar(flow * (1 + ripple * 0.35));
-        this.acc.add(rippleFlow);
+        const ripple = Math.sin(
+          time * 1.3 +
+          outward.y * 8.0 +
+          Math.atan2(outward.z, outward.x) * 3.0
+        );
 
-        const swirl = new THREE.Vector3().crossVectors(tangent, outward).normalize().multiplyScalar(0.004);
-        this.acc.add(swirl);
+        this.acc.add(tangent.multiplyScalar(flow * (1 + ripple * 0.35)));
 
         this.acc.x += (Math.random() - 0.5) * 0.0025;
         this.acc.y += (Math.random() - 0.5) * 0.0025;
-        this.acc.z += (Math.random() - 0.5) * 0.0025;
-
-        this.vel.add(this.acc);
-
-        const drag = THREE.MathUtils.lerp(0.985, 0.993, this.flowBoost);
-        this.vel.multiplyScalar(drag);
-
-        this.pos.add(this.vel);
-        this.mesh.position.copy(this.pos);
-
-        if (this.vel.lengthSq() > 0.00001) {
-          const dir = this.vel.clone().normalize();
-          const target = this.pos.clone().add(dir);
-          this.mesh.lookAt(target);
-        }
-
-        const densityWhite = Math.max(0, (proximity - 0.65) / 0.35);
-        const lightness = THREE.MathUtils.lerp(0.65, 1.0, densityWhite * 0.9);
-        const saturation = THREE.MathUtils.lerp(0.85, 0.0, densityWhite * 0.9);
-        const hue = 0.56 + Math.min(this.vel.length() * 0.03, 0.08);
-
-        this.material.color.setHSL(hue, saturation, lightness);
-
-        const fadeIn = Math.min(1, this.age / 30);
-        const fadeOut = Math.max(0, 1 - this.age / this.maxAge);
-        this.material.opacity = fadeIn * fadeOut * 0.95;
-      }
-
-      isDead() {
-        return this.age > this.maxAge;
-      }
-
-      dispose() {
-        scene.remove(this.mesh);
-        this.material.dispose();
-      }
-    }
-
-    const particles = [];
-
-    function spawnBurst(worldPos, count = settings.spawnCount) {
-      for (let i = 0; i < count; i++) {
-        if (particles.length >= settings.maxParticles) {
-          const old = particles.shift();
-          old.dispose();
-        }
-
-        const dir = new THREE.Vector3(
-          Math.random() * 2 - 1,
-          Math.random() * 2 - 1,
-          Math.random() * 2 - 1
-        ).normalize();
-
-        const speed = 0.03 + Math.random() * 0.07;
-        const position = worldPos.clone().add(dir.clone().multiplyScalar(Math.random() * 0.3));
-        const velocity = dir.multiplyScalar(speed);
-
-        particles.push(new Particle(position, velocity));
-      }
-    }
-
-    const raycaster = new THREE.Raycaster();
-    const pointer = new THREE.Vector2();
-    const spawnPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
-
-    function screenToWorld(clientX, clientY) {
-      pointer.x = (clientX / window.innerWidth) * 2 - 1;
-      pointer.y = -(clientY / window.innerHeight) * 2 + 1;
-
-      raycaster.setFromCamera(pointer, camera);
-
-      const point = new THREE.Vector3();
-      raycaster.ray.intersectPlane(spawnPlane, point);
-      return point;
-    }
-
-    renderer.domElement.addEventListener("pointerdown", (event) => {
-      const world = screenToWorld(event.clientX, event.clientY);
-      spawnBurst(world, settings.spawnCount);
-    });
-
-    function onResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    }
-
-    window.addEventListener("resize", onResize);
-
-    spawnBurst(new THREE.Vector3(0, 0, 0), 180);
-
-    function animate(timeMs) {
-      const time = timeMs * 0.001;
-
-      controls.update();
-
-      for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
-        p.update(time);
-
-        if (p.isDead()) {
-          p.dispose();
-          particles.splice(i, 1);
-        }
-      }
-
-      renderer.render(scene, camera);
-      requestAnimationFrame(animate);
-    }
-
-    animate(0);
-  </script>
-</body>
-</html>
+        this.acc.z += (Math.random() - 0.

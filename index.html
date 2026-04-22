@@ -6,7 +6,7 @@
     name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
   />
-  <title>Sardines</title>
+  <title>Triangle Sphere Swarm 3D</title>
   <style>
     html, body {
       margin: 0;
@@ -33,8 +33,7 @@
       padding: 12px 14px;
       border-radius: 14px;
       backdrop-filter: blur(8px);
-      min-width: 250px;
-      max-width: 300px;
+      min-width: 240px;
     }
 
     .panel h1 {
@@ -50,10 +49,8 @@
     .row label {
       display: block;
       margin-bottom: 4px;
-      opacity: 0.92;
     }
 
-    .panel select,
     .panel input[type="range"],
     .panel button {
       width: 100%;
@@ -63,15 +60,10 @@
       font: inherit;
     }
 
-    .panel select,
     .panel button {
       padding: 8px 10px;
       background: rgba(255,255,255,0.1);
       color: white;
-    }
-
-    .panel input[type="range"] {
-      background: transparent;
     }
 
     .mini {
@@ -107,7 +99,6 @@
       background: rgba(0,0,0,0.28);
       backdrop-filter: blur(8px);
       border-radius: 999px;
-      padding: 0;
       overflow: hidden;
     }
 
@@ -125,8 +116,6 @@
   </style>
 </head>
 <body>
-  <canvas id="canvas"></canvas>
-
   <button class="toggle" id="togglePanel">☰</button>
 
   <div class="collapsed-panel hidden" id="collapsedPanel">
@@ -134,37 +123,26 @@
   </div>
 
   <div class="panel" id="panel">
-    <h1>Triangle Swarm Lab</h1>
+    <h1>3D Sphere Swarm</h1>
 
     <div class="row">
-      <label for="pathSelect">Attractor path</label>
-      <select id="pathSelect">
-        <option value="circle">Circle</option>
-        <option value="figure8">Figure Eight</option>
-        <option value="lissajous" selected>Lissajous</option>
-        <option value="torusish">Torus-ish</option>
-        <option value="chaotic">Chaotic Loop</option>
-      </select>
+      <label for="spawnCount">Spawn count: <span id="spawnCountValue">80</span></label>
+      <input id="spawnCount" type="range" min="10" max="200" step="1" value="80" />
     </div>
 
     <div class="row">
-      <label for="spawnCount">Spawn count: <span id="spawnCountValue">100</span></label>
-      <input id="spawnCount" type="range" min="20" max="220" step="1" value="100" />
+      <label for="sphereRadius">Sphere radius: <span id="sphereRadiusValue">5.0</span></label>
+      <input id="sphereRadius" type="range" min="2" max="9" step="0.1" value="5" />
     </div>
 
     <div class="row">
-      <label for="attractStrength">Attraction: <span id="attractStrengthValue">1.8</span></label>
-      <input id="attractStrength" type="range" min="0.4" max="4.5" step="0.1" value="1.8" />
+      <label for="pullStrength">Shell attraction: <span id="pullStrengthValue">0.020</span></label>
+      <input id="pullStrength" type="range" min="0.002" max="0.06" step="0.001" value="0.020" />
     </div>
 
     <div class="row">
-      <label for="flowStrength">Flow: <span id="flowStrengthValue">1.8</span></label>
-      <input id="flowStrength" type="range" min="0.2" max="5" step="0.1" value="1.8" />
-    </div>
-
-    <div class="row">
-      <label for="trailAmount">Trail: <span id="trailAmountValue">0.14</span></label>
-      <input id="trailAmount" type="range" min="0.03" max="0.35" step="0.01" value="0.14" />
+      <label for="flowStrength">Surface flow: <span id="flowStrengthValue">0.020</span></label>
+      <input id="flowStrength" type="range" min="0.002" max="0.06" step="0.001" value="0.020" />
     </div>
 
     <div class="row">
@@ -172,49 +150,29 @@
     </div>
 
     <div class="mini">
-      Tap to generate triangles. Collapse the panel when you want a clear view.
+      Tap to spawn. Drag to orbit. Pinch to zoom.
     </div>
   </div>
 
-  <script>
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
+  <script type="module">
+    import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+    import { OrbitControls } from "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js";
 
     const panel = document.getElementById("panel");
     const togglePanel = document.getElementById("togglePanel");
     const collapsedPanel = document.getElementById("collapsedPanel");
     const openPanelBtn = document.getElementById("openPanelBtn");
 
-    const pathSelect = document.getElementById("pathSelect");
     const spawnCountSlider = document.getElementById("spawnCount");
-    const attractStrengthSlider = document.getElementById("attractStrength");
+    const sphereRadiusSlider = document.getElementById("sphereRadius");
+    const pullStrengthSlider = document.getElementById("pullStrength");
     const flowStrengthSlider = document.getElementById("flowStrength");
-    const trailAmountSlider = document.getElementById("trailAmount");
     const clearBtn = document.getElementById("clearBtn");
 
     const spawnCountValue = document.getElementById("spawnCountValue");
-    const attractStrengthValue = document.getElementById("attractStrengthValue");
+    const sphereRadiusValue = document.getElementById("sphereRadiusValue");
+    const pullStrengthValue = document.getElementById("pullStrengthValue");
     const flowStrengthValue = document.getElementById("flowStrengthValue");
-    const trailAmountValue = document.getElementById("trailAmountValue");
-
-    let width = 0;
-    let height = 0;
-    let dpr = Math.min(window.devicePixelRatio || 1, 2);
-
-    const particles = [];
-    const maxParticles = 6500;
-
-    let centerX = 0;
-    let centerY = 0;
-    let scaleBase = 0;
-
-    const settings = {
-      path: "lissajous",
-      spawnCount: 100,
-      attractStrength: 1.8,
-      flowStrength: 1.8,
-      trailAmount: 0.14
-    };
 
     function collapsePanel() {
       panel.classList.add("hidden");
@@ -227,401 +185,276 @@
     }
 
     togglePanel.addEventListener("click", () => {
-      if (panel.classList.contains("hidden")) {
-        expandPanel();
-      } else {
-        collapsePanel();
-      }
+      if (panel.classList.contains("hidden")) expandPanel();
+      else collapsePanel();
     });
 
     openPanelBtn.addEventListener("click", expandPanel);
 
-    pathSelect.addEventListener("input", () => {
-      settings.path = pathSelect.value;
-    });
+    const settings = {
+      spawnCount: 80,
+      sphereRadius: 5,
+      pullStrength: 0.020,
+      flowStrength: 0.020,
+      maxParticles: 2500
+    };
 
     spawnCountSlider.addEventListener("input", () => {
       settings.spawnCount = Number(spawnCountSlider.value);
       spawnCountValue.textContent = settings.spawnCount;
     });
 
-    attractStrengthSlider.addEventListener("input", () => {
-      settings.attractStrength = Number(attractStrengthSlider.value);
-      attractStrengthValue.textContent = settings.attractStrength.toFixed(1);
+    sphereRadiusSlider.addEventListener("input", () => {
+      settings.sphereRadius = Number(sphereRadiusSlider.value);
+      sphereRadiusValue.textContent = settings.sphereRadius.toFixed(1);
+      guideSphere.scale.setScalar(settings.sphereRadius / 5);
+    });
+
+    pullStrengthSlider.addEventListener("input", () => {
+      settings.pullStrength = Number(pullStrengthSlider.value);
+      pullStrengthValue.textContent = settings.pullStrength.toFixed(3);
     });
 
     flowStrengthSlider.addEventListener("input", () => {
       settings.flowStrength = Number(flowStrengthSlider.value);
-      flowStrengthValue.textContent = settings.flowStrength.toFixed(1);
-    });
-
-    trailAmountSlider.addEventListener("input", () => {
-      settings.trailAmount = Number(trailAmountSlider.value);
-      trailAmountValue.textContent = settings.trailAmount.toFixed(2);
+      flowStrengthValue.textContent = settings.flowStrength.toFixed(3);
     });
 
     clearBtn.addEventListener("click", () => {
+      for (const p of particles) {
+        scene.remove(p.mesh);
+      }
       particles.length = 0;
     });
 
-    function resize() {
-      width = window.innerWidth;
-      height = window.innerHeight;
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x05060a);
 
-      canvas.width = Math.floor(width * dpr);
-      canvas.height = Math.floor(height * dpr);
-      canvas.style.width = width + "px";
-      canvas.style.height = height + "px";
+    const camera = new THREE.PerspectiveCamera(
+      45,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      100
+    );
+    camera.position.set(0, 0, 16);
 
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
 
-      centerX = width / 2;
-      centerY = height / 2;
-      scaleBase = Math.min(width, height) * 0.23;
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    const ambient = new THREE.AmbientLight(0xffffff, 0.9);
+    scene.add(ambient);
+
+    const guideSphereGeo = new THREE.SphereGeometry(5, 48, 48);
+    const guideSphereMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.04
+    });
+    const guideSphere = new THREE.Mesh(guideSphereGeo, guideSphereMat);
+    scene.add(guideSphere);
+
+    function createTriangleGeometry(size = 0.16) {
+      const geometry = new THREE.BufferGeometry();
+      const vertices = new Float32Array([
+         size, 0, 0,
+        -size * 0.8, size * 0.5, 0,
+        -size * 0.8, -size * 0.5, 0
+      ]);
+      geometry.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
+      geometry.computeVertexNormals();
+      return geometry;
     }
 
-    function randomRange(min, max) {
-      return min + Math.random() * (max - min);
-    }
+    const sharedGeometry = createTriangleGeometry();
 
-    function clamp(value, min, max) {
-      return Math.max(min, Math.min(max, value));
-    }
+    class Particle {
+      constructor(position, velocity) {
+        this.pos = position.clone();
+        this.vel = velocity.clone();
+        this.acc = new THREE.Vector3();
 
-    function lerp(a, b, t) {
-      return a + (b - a) * t;
-    }
-
-    function pathPoint(type, t) {
-      const s = scaleBase;
-
-      if (type === "circle") {
-        return {
-          x: centerX + Math.cos(t) * s,
-          y: centerY + Math.sin(t) * s
-        };
-      }
-
-      if (type === "figure8") {
-        return {
-          x: centerX + Math.sin(t) * s * 0.95,
-          y: centerY + Math.sin(2 * t) * s * 0.75
-        };
-      }
-
-      if (type === "lissajous") {
-        return {
-          x: centerX + Math.sin(3 * t + 0.8) * s * 0.95,
-          y: centerY + Math.sin(4 * t) * s * 0.80
-        };
-      }
-
-      if (type === "torusish") {
-        const r = s * (0.72 + 0.24 * Math.cos(3 * t));
-        return {
-          x: centerX + Math.cos(2 * t) * r,
-          y: centerY + Math.sin(2 * t) * r
-        };
-      }
-
-      if (type === "chaotic") {
-        return {
-          x: centerX + (
-            0.62 * Math.sin(2.1 * t) +
-            0.23 * Math.sin(5.3 * t + 1.2) +
-            0.15 * Math.sin(9.1 * t)
-          ) * s * 1.05,
-          y: centerY + (
-            0.58 * Math.cos(3.2 * t + 0.4) +
-            0.22 * Math.sin(6.4 * t) +
-            0.16 * Math.cos(8.2 * t + 0.6)
-          ) * s * 0.95
-        };
-      }
-
-      return {
-        x: centerX + Math.cos(t) * s,
-        y: centerY + Math.sin(t) * s
-      };
-    }
-
-    function nearestPathData(type, x, y) {
-      let bestT = 0;
-      let bestD2 = Infinity;
-      let bestPoint = null;
-
-      const samples = 240;
-
-      for (let i = 0; i < samples; i++) {
-        const t = (i / samples) * Math.PI * 2;
-        const p = pathPoint(type, t);
-        const dx = p.x - x;
-        const dy = p.y - y;
-        const d2 = dx * dx + dy * dy;
-
-        if (d2 < bestD2) {
-          bestD2 = d2;
-          bestT = t;
-          bestPoint = p;
-        }
-      }
-
-      const eps = 0.01;
-      const p1 = pathPoint(type, bestT - eps);
-      const p2 = pathPoint(type, bestT + eps);
-
-      const tx = p2.x - p1.x;
-      const ty = p2.y - p1.y;
-      const len = Math.hypot(tx, ty) || 1;
-
-      return {
-        point: bestPoint,
-        tangentX: tx / len,
-        tangentY: ty / len,
-        distance: Math.sqrt(bestD2)
-      };
-    }
-
-    function estimatePathDensity(type, px, py) {
-      let count = 0;
-      const radius = 18;
-      const radius2 = radius * radius;
-
-      for (let i = 0; i < particles.length; i++) {
-        const p = particles[i];
-        if (!p.pathProximity || p.pathProximity > 0.55) continue;
-
-        const dx = p.x - px;
-        const dy = p.y - py;
-        const d2 = dx * dx + dy * dy;
-
-        if (d2 < radius2) count++;
-      }
-
-      return clamp(count / 10, 0, 1);
-    }
-
-    class TriangleParticle {
-      constructor(x, y, angle, speed) {
-        this.x = x;
-        this.y = y;
-
-        this.vx = Math.cos(angle) * speed;
-        this.vy = Math.sin(angle) * speed;
-
-        this.ax = 0;
-        this.ay = 0;
-
-        this.size = randomRange(3, 8);
         this.age = 0;
-        this.maxAge = randomRange(800, 1400);
+        this.maxAge = 900 + Math.random() * 700;
 
-        this.heading = angle;
-        this.turnAmount = 0;
-
-        this.hueOffset = randomRange(-20, 20);
-        this.pathOffset = randomRange(-1, 1);
-
-        this.pathProximity = 0;
-        this.onPathEase = 0;
+        this.pathEase = 0;
         this.flowBoost = 0;
+
+        const hue = 0.55 + (Math.random() - 0.5) * 0.08;
+        const color = new THREE.Color().setHSL(hue, 0.85, 0.65);
+
+        this.material = new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.9,
+          side: THREE.DoubleSide
+        });
+
+        this.mesh = new THREE.Mesh(sharedGeometry, this.material);
+        this.mesh.position.copy(this.pos);
+        scene.add(this.mesh);
       }
 
-      update() {
+      update(time) {
         this.age += 1;
-        this.ax = 0;
-        this.ay = 0;
+        this.acc.set(0, 0, 0);
 
-        const burstStrength = Math.max(0, 1 - this.age / 55);
-        const burstAngle = Math.atan2(this.vy, this.vx);
-        this.ax += Math.cos(burstAngle) * burstStrength * 0.028;
-        this.ay += Math.sin(burstAngle) * burstStrength * 0.028;
-
-        if (this.age > 20) {
-          const data = nearestPathData(settings.path, this.x, this.y);
-          const pullX = data.point.x - this.x;
-          const pullY = data.point.y - this.y;
-
-          const normalizedDistance = clamp(data.distance / 60, 0, 1);
-          this.pathProximity = 1 - normalizedDistance;
-
-          const targetOnPathEase = this.pathProximity > 0.55 ? 1 : 0;
-          this.onPathEase = lerp(this.onPathEase, targetOnPathEase, 0.035);
-
-          const attract = settings.attractStrength * 0.001;
-          this.ax += pullX * attract;
-          this.ay += pullY * attract;
-
-          this.flowBoost = lerp(this.flowBoost, this.onPathEase, 0.02);
-          const calmFlow = settings.flowStrength * 0.006;
-          const fastFlow = settings.flowStrength * 0.018;
-          const currentFlow = lerp(calmFlow, fastFlow, this.flowBoost);
-
-          this.ax += data.tangentX * currentFlow;
-          this.ay += data.tangentY * currentFlow;
-
-          const nx = -data.tangentY;
-          const ny = data.tangentX;
-          const orbitStrength = 0.0032 + 0.001 * this.pathOffset;
-
-          this.ax += nx * orbitStrength;
-          this.ay += ny * orbitStrength;
+        const burstStrength = Math.max(0, 1 - this.age / 70);
+        if (this.vel.lengthSq() > 0.00001) {
+          this.acc.add(this.vel.clone().normalize().multiplyScalar(burstStrength * 0.01));
         }
 
-        this.ax += randomRange(-0.0055, 0.0055);
-        this.ay += randomRange(-0.0055, 0.0055);
+        const outward = this.pos.clone().normalize();
+        const dist = this.pos.length();
+        const radialError = settings.sphereRadius - dist;
 
-        this.vx += this.ax;
-        this.vy += this.ay;
+        this.acc.add(outward.clone().multiplyScalar(radialError * settings.pullStrength));
 
-        const dragBase = 0.985;
-        const pathDrag = lerp(dragBase, 0.992, this.flowBoost);
-        this.vx *= pathDrag;
-        this.vy *= pathDrag;
+        const up = new THREE.Vector3(0, 1, 0);
+        let tangent = new THREE.Vector3().crossVectors(outward, up);
 
-        this.x += this.vx;
-        this.y += this.vy;
+        if (tangent.lengthSq() < 0.0001) {
+          tangent = new THREE.Vector3().crossVectors(outward, new THREE.Vector3(1, 0, 0));
+        }
 
-        const newHeading = Math.atan2(this.vy, this.vx);
-        let delta = newHeading - this.heading;
+        tangent.normalize();
 
-        while (delta > Math.PI) delta -= Math.PI * 2;
-        while (delta < -Math.PI) delta += Math.PI * 2;
+        const proximity = 1 - Math.min(Math.abs(radialError) / 1.2, 1);
+        const targetEase = proximity > 0.55 ? 1 : 0;
+        this.pathEase += (targetEase - this.pathEase) * 0.03;
+        this.flowBoost += (this.pathEase - this.flowBoost) * 0.02;
 
-        this.turnAmount = Math.abs(delta);
-        this.heading = newHeading;
-      }
+        const calmFlow = settings.flowStrength * 0.5;
+        const fastFlow = settings.flowStrength * 1.8;
+        const flow = THREE.MathUtils.lerp(calmFlow, fastFlow, this.flowBoost);
 
-      draw() {
-        const speed = Math.hypot(this.vx, this.vy);
+        const ripple = Math.sin(time * 1.4 + outward.y * 8.0 + Math.atan2(outward.z, outward.x) * 3.0);
+        const rippleFlow = tangent.clone().multiplyScalar(flow * (1 + ripple * 0.35));
+        this.acc.add(rippleFlow);
 
-        const fadeIn = Math.min(1, this.age / 24);
+        const swirl = new THREE.Vector3().crossVectors(tangent, outward).normalize().multiplyScalar(0.004);
+        this.acc.add(swirl);
+
+        this.acc.x += (Math.random() - 0.5) * 0.0025;
+        this.acc.y += (Math.random() - 0.5) * 0.0025;
+        this.acc.z += (Math.random() - 0.5) * 0.0025;
+
+        this.vel.add(this.acc);
+
+        const drag = THREE.MathUtils.lerp(0.985, 0.993, this.flowBoost);
+        this.vel.multiplyScalar(drag);
+
+        this.pos.add(this.vel);
+        this.mesh.position.copy(this.pos);
+
+        if (this.vel.lengthSq() > 0.00001) {
+          const dir = this.vel.clone().normalize();
+          const target = this.pos.clone().add(dir);
+          this.mesh.lookAt(target);
+        }
+
+        const densityWhite = Math.max(0, (proximity - 0.65) / 0.35);
+        const lightness = THREE.MathUtils.lerp(0.65, 1.0, densityWhite * 0.9);
+        const saturation = THREE.MathUtils.lerp(0.85, 0.0, densityWhite * 0.9);
+        const hue = 0.56 + Math.min(this.vel.length() * 0.03, 0.08);
+
+        this.material.color.setHSL(hue, saturation, lightness);
+
+        const fadeIn = Math.min(1, this.age / 30);
         const fadeOut = Math.max(0, 1 - this.age / this.maxAge);
-        const alpha = fadeIn * fadeOut * 0.92;
-
-        const densityWhiten = estimatePathDensity(settings.path, this.x, this.y);
-        const whitenAmount = clamp(
-          this.pathProximity * 0.7 + densityWhiten * 0.55,
-          0,
-          1
-        );
-
-        const hue = 200 + Math.min(this.turnAmount * 1200, 120) + this.hueOffset;
-        const saturation = lerp(85, 0, whitenAmount);
-        const lightness = lerp(
-          55 + Math.min(speed * 8, 20),
-          100,
-          whitenAmount
-        );
-
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        ctx.rotate(this.heading);
-
-        ctx.beginPath();
-        ctx.moveTo(this.size, 0);
-        ctx.lineTo(-this.size * 0.8, this.size * 0.5);
-        ctx.lineTo(-this.size * 0.8, -this.size * 0.5);
-        ctx.closePath();
-
-        ctx.fillStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
-        ctx.fill();
-
-        ctx.restore();
+        this.material.opacity = fadeIn * fadeOut * 0.95;
       }
 
       isDead() {
         return this.age > this.maxAge;
       }
+
+      dispose() {
+        scene.remove(this.mesh);
+        this.material.dispose();
+      }
     }
 
-    function spawnBurst(x, y, count = settings.spawnCount) {
+    const particles = [];
+
+    function spawnBurst(worldPos, count = settings.spawnCount) {
       for (let i = 0; i < count; i++) {
-        if (particles.length >= maxParticles) {
-          particles.shift();
+        if (particles.length >= settings.maxParticles) {
+          const old = particles.shift();
+          old.dispose();
         }
 
-        const angle = Math.random() * Math.PI * 2;
-        const speed = randomRange(0.8, 3.8);
-        particles.push(new TriangleParticle(x, y, angle, speed));
+        const dir = new THREE.Vector3(
+          Math.random() * 2 - 1,
+          Math.random() * 2 - 1,
+          Math.random() * 2 - 1
+        ).normalize();
+
+        const speed = 0.03 + Math.random() * 0.07;
+        const position = worldPos.clone().add(dir.clone().multiplyScalar(Math.random() * 0.3));
+        const velocity = dir.multiplyScalar(speed);
+
+        particles.push(new Particle(position, velocity));
       }
     }
 
-    function drawGuidePath() {
-      ctx.beginPath();
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const spawnPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
 
-      const steps = 360;
-      for (let i = 0; i <= steps; i++) {
-        const t = (i / steps) * Math.PI * 2;
-        const p = pathPoint(settings.path, t);
+    function screenToWorld(clientX, clientY) {
+      pointer.x = (clientX / window.innerWidth) * 2 - 1;
+      pointer.y = -(clientY / window.innerHeight) * 2 + 1;
 
-        if (i === 0) {
-          ctx.moveTo(p.x, p.y);
-        } else {
-          ctx.lineTo(p.x, p.y);
-        }
-      }
+      raycaster.setFromCamera(pointer, camera);
 
-      ctx.strokeStyle = "rgba(255,255,255,0.03)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      const point = new THREE.Vector3();
+      raycaster.ray.intersectPlane(spawnPlane, point);
+      return point;
     }
 
-    function animate() {
-      ctx.fillStyle = `rgba(5, 6, 10, ${settings.trailAmount})`;
-      ctx.fillRect(0, 0, width, height);
+    renderer.domElement.addEventListener("pointerdown", (event) => {
+      const world = screenToWorld(event.clientX, event.clientY);
+      spawnBurst(world, settings.spawnCount);
+    });
 
-      drawGuidePath();
+    function onResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    }
+
+    window.addEventListener("resize", onResize);
+
+    spawnBurst(new THREE.Vector3(0, 0, 0), 180);
+
+    function animate(timeMs) {
+      const time = timeMs * 0.001;
+
+      controls.update();
 
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
-        p.update();
-        p.draw();
+        p.update(time);
 
         if (p.isDead()) {
+          p.dispose();
           particles.splice(i, 1);
         }
       }
 
+      renderer.render(scene, camera);
       requestAnimationFrame(animate);
     }
 
-    function getPointerPosition(event) {
-      if (event.touches && event.touches.length > 0) {
-        return {
-          x: event.touches[0].clientX,
-          y: event.touches[0].clientY
-        };
-      }
-
-      return {
-        x: event.clientX,
-        y: event.clientY
-      };
-    }
-
-    canvas.addEventListener("pointerdown", (event) => {
-      spawnBurst(event.clientX, event.clientY, settings.spawnCount);
-    });
-
-    canvas.addEventListener("touchstart", (event) => {
-      event.preventDefault();
-      const pos = getPointerPosition(event);
-      spawnBurst(pos.x, pos.y, settings.spawnCount);
-    }, { passive: false });
-
-    window.addEventListener("keydown", (event) => {
-      if (event.key === "c" || event.key === "C") {
-        particles.length = 0;
-      }
-    });
-
-    window.addEventListener("resize", resize);
-
-    resize();
-    animate();
-    spawnBurst(centerX, centerY, 160);
+    animate(0);
   </script>
 </body>
 </html>

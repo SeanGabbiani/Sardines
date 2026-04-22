@@ -6,7 +6,7 @@
     name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
   />
-  <title>3D Sphere Swarm</title>
+  <title>Sphere Swarm 3D Canvas</title>
   <style>
     html, body {
       margin: 0;
@@ -33,7 +33,8 @@
       padding: 12px 14px;
       border-radius: 14px;
       backdrop-filter: blur(8px);
-      min-width: 240px;
+      min-width: 250px;
+      max-width: 300px;
     }
 
     .panel h1 {
@@ -66,6 +67,44 @@
       color: white;
     }
 
+    .toggle {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      z-index: 25;
+      border: none;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.28);
+      color: rgba(255,255,255,0.92);
+      backdrop-filter: blur(8px);
+      width: 42px;
+      height: 42px;
+      font-size: 18px;
+    }
+
+    .collapsed-panel {
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      z-index: 21;
+      background: rgba(0,0,0,0.28);
+      backdrop-filter: blur(8px);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .collapsed-panel button {
+      border: none;
+      background: transparent;
+      color: rgba(255,255,255,0.92);
+      padding: 10px 14px;
+      font: inherit;
+    }
+
+    .hidden {
+      display: none;
+    }
+
     .mini {
       font-size: 11px;
       opacity: 0.72;
@@ -74,27 +113,40 @@
   </style>
 </head>
 <body>
-  <div class="panel">
-    <h1>3D Sphere Swarm</h1>
+  <canvas id="canvas"></canvas>
+
+  <button class="toggle" id="togglePanel">☰</button>
+
+  <div class="collapsed-panel hidden" id="collapsedPanel">
+    <button id="openPanelBtn">Controls ▾</button>
+  </div>
+
+  <div class="panel" id="panel">
+    <h1>Sphere Swarm 3D</h1>
 
     <div class="row">
-      <label for="spawnCount">Spawn count: <span id="spawnCountValue">80</span></label>
-      <input id="spawnCount" type="range" min="10" max="200" step="1" value="80" />
+      <label for="spawnCount">Spawn count: <span id="spawnCountValue">100</span></label>
+      <input id="spawnCount" type="range" min="20" max="220" step="1" value="100" />
     </div>
 
     <div class="row">
-      <label for="sphereRadius">Sphere radius: <span id="sphereRadiusValue">5.0</span></label>
-      <input id="sphereRadius" type="range" min="2" max="9" step="0.1" value="5" />
+      <label for="sphereRadius">Sphere radius: <span id="sphereRadiusValue">170</span></label>
+      <input id="sphereRadius" type="range" min="90" max="260" step="1" value="170" />
     </div>
 
     <div class="row">
-      <label for="pullStrength">Shell attraction: <span id="pullStrengthValue">0.020</span></label>
-      <input id="pullStrength" type="range" min="0.002" max="0.06" step="0.001" value="0.020" />
+      <label for="shellStrength">Shell attraction: <span id="shellStrengthValue">1.8</span></label>
+      <input id="shellStrength" type="range" min="0.4" max="4.5" step="0.1" value="1.8" />
     </div>
 
     <div class="row">
-      <label for="flowStrength">Surface flow: <span id="flowStrengthValue">0.020</span></label>
-      <input id="flowStrength" type="range" min="0.002" max="0.06" step="0.001" value="0.020" />
+      <label for="flowStrength">Flow: <span id="flowStrengthValue">1.8</span></label>
+      <input id="flowStrength" type="range" min="0.2" max="5" step="0.1" value="1.8" />
+    </div>
+
+    <div class="row">
+      <label for="trailAmount">Trail: <span id="trailAmountValue">0.12</span></label>
+      <input id="trailAmount" type="range" min="0.03" max="0.35" step="0.01" value="0.12" />
     </div>
 
     <div class="row">
@@ -102,32 +154,76 @@
     </div>
 
     <div class="mini">
-      Tap to spawn. Drag to orbit. Pinch to zoom.
+      Tap to spawn. Drag to orbit. This is true 3D motion drawn with canvas projection.
     </div>
   </div>
 
-  <script type="module">
-    import * as THREE from "https://threejs.org/build/three.module.js";
-    import { OrbitControls } from "https://threejs.org/examples/jsm/controls/OrbitControls.js";
+  <script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+
+    const panel = document.getElementById("panel");
+    const togglePanel = document.getElementById("togglePanel");
+    const collapsedPanel = document.getElementById("collapsedPanel");
+    const openPanelBtn = document.getElementById("openPanelBtn");
 
     const spawnCountSlider = document.getElementById("spawnCount");
     const sphereRadiusSlider = document.getElementById("sphereRadius");
-    const pullStrengthSlider = document.getElementById("pullStrength");
+    const shellStrengthSlider = document.getElementById("shellStrength");
     const flowStrengthSlider = document.getElementById("flowStrength");
+    const trailAmountSlider = document.getElementById("trailAmount");
     const clearBtn = document.getElementById("clearBtn");
 
     const spawnCountValue = document.getElementById("spawnCountValue");
     const sphereRadiusValue = document.getElementById("sphereRadiusValue");
-    const pullStrengthValue = document.getElementById("pullStrengthValue");
+    const shellStrengthValue = document.getElementById("shellStrengthValue");
     const flowStrengthValue = document.getElementById("flowStrengthValue");
+    const trailAmountValue = document.getElementById("trailAmountValue");
 
     const settings = {
-      spawnCount: 80,
-      sphereRadius: 5,
-      pullStrength: 0.020,
-      flowStrength: 0.020,
-      maxParticles: 1800
+      spawnCount: 100,
+      sphereRadius: 170,
+      shellStrength: 1.8,
+      flowStrength: 1.8,
+      trailAmount: 0.12,
+      maxParticles: 6500
     };
+
+    let width = 0;
+    let height = 0;
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let centerX = 0;
+    let centerY = 0;
+
+    const particles = [];
+
+    const camera = {
+      yaw: 0.7,
+      pitch: -0.2,
+      distance: 700,
+      focal: 700
+    };
+
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    function collapsePanel() {
+      panel.classList.add("hidden");
+      collapsedPanel.classList.remove("hidden");
+    }
+
+    function expandPanel() {
+      panel.classList.remove("hidden");
+      collapsedPanel.classList.add("hidden");
+    }
+
+    togglePanel.addEventListener("click", () => {
+      if (panel.classList.contains("hidden")) expandPanel();
+      else collapsePanel();
+    });
+
+    openPanelBtn.addEventListener("click", expandPanel);
 
     spawnCountSlider.addEventListener("input", () => {
       settings.spawnCount = Number(spawnCountSlider.value);
@@ -136,125 +232,461 @@
 
     sphereRadiusSlider.addEventListener("input", () => {
       settings.sphereRadius = Number(sphereRadiusSlider.value);
-      sphereRadiusValue.textContent = settings.sphereRadius.toFixed(1);
-      guideSphere.scale.setScalar(settings.sphereRadius / 5);
+      sphereRadiusValue.textContent = settings.sphereRadius;
     });
 
-    pullStrengthSlider.addEventListener("input", () => {
-      settings.pullStrength = Number(pullStrengthSlider.value);
-      pullStrengthValue.textContent = settings.pullStrength.toFixed(3);
+    shellStrengthSlider.addEventListener("input", () => {
+      settings.shellStrength = Number(shellStrengthSlider.value);
+      shellStrengthValue.textContent = settings.shellStrength.toFixed(1);
     });
 
     flowStrengthSlider.addEventListener("input", () => {
       settings.flowStrength = Number(flowStrengthSlider.value);
-      flowStrengthValue.textContent = settings.flowStrength.toFixed(3);
+      flowStrengthValue.textContent = settings.flowStrength.toFixed(1);
     });
 
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x05060a);
+    trailAmountSlider.addEventListener("input", () => {
+      settings.trailAmount = Number(trailAmountSlider.value);
+      trailAmountValue.textContent = settings.trailAmount.toFixed(2);
+    });
 
-    const camera = new THREE.PerspectiveCamera(
-      45,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      100
-    );
-    camera.position.set(0, 0, 16);
+    clearBtn.addEventListener("click", () => {
+      particles.length = 0;
+    });
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(height * dpr);
+      canvas.style.width = width + "px";
+      canvas.style.height = height + "px";
 
-    scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const guideSphere = new THREE.Mesh(
-      new THREE.SphereGeometry(5, 40, 40),
-      new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        wireframe: true,
-        transparent: true,
-        opacity: 0.05
-      })
-    );
-    scene.add(guideSphere);
-
-    function createTriangleGeometry(size = 0.15) {
-      const geometry = new THREE.BufferGeometry();
-      const vertices = new Float32Array([
-         size, 0, 0,
-        -size * 0.8, size * 0.5, 0,
-        -size * 0.8, -size * 0.5, 0
-      ]);
-      geometry.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
-      geometry.computeVertexNormals();
-      return geometry;
+      centerX = width / 2;
+      centerY = height / 2;
     }
 
-    const sharedGeometry = createTriangleGeometry();
-    const particles = [];
+    function randomRange(min, max) {
+      return min + Math.random() * (max - min);
+    }
 
-    class Particle {
-      constructor(position, velocity) {
-        this.pos = position.clone();
-        this.vel = velocity.clone();
-        this.acc = new THREE.Vector3();
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function lerp(a, b, t) {
+      return a + (b - a) * t;
+    }
+
+    function vec3(x = 0, y = 0, z = 0) {
+      return { x, y, z };
+    }
+
+    function add(a, b) {
+      return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z };
+    }
+
+    function sub(a, b) {
+      return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z };
+    }
+
+    function mul(a, s) {
+      return { x: a.x * s, y: a.y * s, z: a.z * s };
+    }
+
+    function dot(a, b) {
+      return a.x * b.x + a.y * b.y + a.z * b.z;
+    }
+
+    function cross(a, b) {
+      return {
+        x: a.y * b.z - a.z * b.y,
+        y: a.z * b.x - a.x * b.z,
+        z: a.x * b.y - a.y * b.x
+      };
+    }
+
+    function length(v) {
+      return Math.hypot(v.x, v.y, v.z);
+    }
+
+    function normalize(v) {
+      const len = length(v) || 0.00001;
+      return { x: v.x / len, y: v.y / len, z: v.z / len };
+    }
+
+    function rotateY(v, angle) {
+      const c = Math.cos(angle);
+      const s = Math.sin(angle);
+      return {
+        x: v.x * c + v.z * s,
+        y: v.y,
+        z: -v.x * s + v.z * c
+      };
+    }
+
+    function rotateX(v, angle) {
+      const c = Math.cos(angle);
+      const s = Math.sin(angle);
+      return {
+        x: v.x,
+        y: v.y * c - v.z * s,
+        z: v.y * s + v.z * c
+      };
+    }
+
+    function worldToCamera(v) {
+      let p = rotateY(v, -camera.yaw);
+      p = rotateX(p, -camera.pitch);
+      p.z += camera.distance;
+      return p;
+    }
+
+    function project(v) {
+      const p = worldToCamera(v);
+      if (p.z <= 1) return null;
+
+      const scale = camera.focal / p.z;
+      return {
+        x: centerX + p.x * scale,
+        y: centerY - p.y * scale,
+        scale,
+        depth: p.z
+      };
+    }
+
+    function drawSphereGuide() {
+      const steps = 120;
+      const latitudes = [-0.8, -0.35, 0, 0.35, 0.8];
+
+      ctx.strokeStyle = "rgba(255,255,255,0.035)";
+      ctx.lineWidth = 1;
+
+      for (const lat of latitudes) {
+        let first = true;
+        ctx.beginPath();
+        for (let i = 0; i <= steps; i++) {
+          const t = (i / steps) * Math.PI * 2;
+          const r = settings.sphereRadius * Math.cos(lat);
+          const y = settings.sphereRadius * Math.sin(lat);
+          const p = project(vec3(
+            Math.cos(t) * r,
+            y,
+            Math.sin(t) * r
+          ));
+          if (!p) continue;
+          if (first) {
+            ctx.moveTo(p.x, p.y);
+            first = false;
+          } else {
+            ctx.lineTo(p.x, p.y);
+          }
+        }
+        ctx.stroke();
+      }
+
+      const meridians = [0, Math.PI / 2, Math.PI / 4];
+      for (const m of meridians) {
+        let first = true;
+        ctx.beginPath();
+        for (let i = 0; i <= steps; i++) {
+          const t = -Math.PI / 2 + (i / steps) * Math.PI;
+          const p = project(vec3(
+            settings.sphereRadius * Math.cos(t) * Math.cos(m),
+            settings.sphereRadius * Math.sin(t),
+            settings.sphereRadius * Math.cos(t) * Math.sin(m)
+          ));
+          if (!p) continue;
+          if (first) {
+            ctx.moveTo(p.x, p.y);
+            first = false;
+          } else {
+            ctx.lineTo(p.x, p.y);
+          }
+        }
+        ctx.stroke();
+      }
+    }
+
+    function estimateLocalDensity(px, py, radius = 18) {
+      let count = 0;
+      const r2 = radius * radius;
+
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        if (!p.screen) continue;
+        if (p.shellProximity < 0.6) continue;
+
+        const dx = p.screen.x - px;
+        const dy = p.screen.y - py;
+        if (dx * dx + dy * dy < r2) count++;
+      }
+
+      return clamp(count / 12, 0, 1);
+    }
+
+    class TriangleParticle {
+      constructor(pos, vel) {
+        this.pos = pos;
+        this.vel = vel;
+        this.acc = vec3();
+
+        this.size = randomRange(3, 8);
         this.age = 0;
-        this.maxAge = 900 + Math.random() * 700;
+        this.maxAge = randomRange(800, 1400);
+
+        this.heading2D = 0;
+        this.turnAmount = 0;
+        this.hueOffset = randomRange(-20, 20);
+
+        this.shellProximity = 0;
+        this.onShellEase = 0;
         this.flowBoost = 0;
 
-        this.material = new THREE.MeshBasicMaterial({
-          color: new THREE.Color().setHSL(0.58 + (Math.random() - 0.5) * 0.08, 0.85, 0.65),
-          transparent: true,
-          opacity: 0.9,
-          side: THREE.DoubleSide
-        });
-
-        this.mesh = new THREE.Mesh(sharedGeometry, this.material);
-        this.mesh.position.copy(this.pos);
-        scene.add(this.mesh);
+        this.screen = null;
       }
 
       update(time) {
         this.age += 1;
-        this.acc.set(0, 0, 0);
+        this.acc = vec3();
 
-        const burst = Math.max(0, 1 - this.age / 70);
-        if (this.vel.lengthSq() > 0.00001) {
-          this.acc.add(this.vel.clone().normalize().multiplyScalar(burst * 0.01));
-        }
+        const burstStrength = Math.max(0, 1 - this.age / 70);
+        const velNorm = normalize(this.vel);
+        this.acc = add(this.acc, mul(velNorm, burstStrength * 0.25));
 
-        const dist = this.pos.length() || 0.0001;
-        const outward = this.pos.clone().divideScalar(dist);
-        const radialError = settings.sphereRadius - dist;
+        const r = length(this.pos);
+        const radialDir = normalize(this.pos);
+        const radialError = settings.sphereRadius - r;
 
-        this.acc.add(outward.clone().multiplyScalar(radialError * settings.pullStrength));
+        const shellPull = mul(radialDir, radialError * settings.shellStrength * 0.03);
+        this.acc = add(this.acc, shellPull);
 
-        let tangent = new THREE.Vector3().crossVectors(outward, new THREE.Vector3(0, 1, 0));
-        if (tangent.lengthSq() < 0.0001) {
-          tangent = new THREE.Vector3().crossVectors(outward, new THREE.Vector3(1, 0, 0));
-        }
-        tangent.normalize();
+        this.shellProximity = 1 - clamp(Math.abs(radialError) / 40, 0, 1);
 
-        const proximity = 1 - Math.min(Math.abs(radialError) / 1.2, 1);
-        this.flowBoost += (proximity - this.flowBoost) * 0.02;
+        const targetOnShell = this.shellProximity > 0.58 ? 1 : 0;
+        this.onShellEase = lerp(this.onShellEase, targetOnShell, 0.03);
+        this.flowBoost = lerp(this.flowBoost, this.onShellEase, 0.02);
 
-        const calmFlow = settings.flowStrength * 0.5;
-        const fastFlow = settings.flowStrength * 1.8;
-        const flow = THREE.MathUtils.lerp(calmFlow, fastFlow, this.flowBoost);
+        let up = vec3(0, 1, 0);
+        let tangent = cross(radialDir, up);
+        if (length(tangent) < 0.001) tangent = cross(radialDir, vec3(1, 0, 0));
+        tangent = normalize(tangent);
+
+        let binormal = normalize(cross(tangent, radialDir));
+
+        const lon = Math.atan2(this.pos.z, this.pos.x);
+        const lat = Math.asin(clamp(this.pos.y / Math.max(r, 0.0001), -1, 1));
 
         const ripple = Math.sin(
-          time * 1.3 +
-          outward.y * 8.0 +
-          Math.atan2(outward.z, outward.x) * 3.0
+          time * 1.4 +
+          lat * 10.0 +
+          lon * 3.6
         );
 
-        this.acc.add(tangent.multiplyScalar(flow * (1 + ripple * 0.35)));
+        const calmFlow = settings.flowStrength * 0.10;
+        const fastFlow = settings.flowStrength * 0.34;
+        const currentFlow = lerp(calmFlow, fastFlow, this.flowBoost);
 
-        this.acc.x += (Math.random() - 0.5) * 0.0025;
-        this.acc.y += (Math.random() - 0.5) * 0.0025;
-        this.acc.z += (Math.random() - 0.
+        const rippleFlow = currentFlow * (1 + ripple * 0.45);
+        this.acc = add(this.acc, mul(tangent, rippleFlow));
+
+        const orbital = (0.05 + this.hueOffset * 0.0002) * (0.7 + this.shellProximity * 0.4);
+        this.acc = add(this.acc, mul(binormal, orbital));
+
+        this.acc.x += randomRange(-0.02, 0.02);
+        this.acc.y += randomRange(-0.02, 0.02);
+        this.acc.z += randomRange(-0.02, 0.02);
+
+        this.vel = add(this.vel, this.acc);
+
+        const drag = lerp(0.985, 0.993, this.flowBoost);
+        this.vel = mul(this.vel, drag);
+
+        this.pos = add(this.pos, this.vel);
+
+        const projNow = project(this.pos);
+        const projNext = project(add(this.pos, this.vel));
+        this.screen = projNow;
+
+        if (projNow && projNext) {
+          const newHeading = Math.atan2(projNext.y - projNow.y, projNext.x - projNow.x);
+          let delta = newHeading - this.heading2D;
+          while (delta > Math.PI) delta -= Math.PI * 2;
+          while (delta < -Math.PI) delta += Math.PI * 2;
+          this.turnAmount = Math.abs(delta);
+          this.heading2D = newHeading;
+        }
+      }
+
+      draw() {
+        if (!this.screen) return;
+
+        const p = this.screen;
+        const speed = length(this.vel);
+
+        const fadeIn = Math.min(1, this.age / 30);
+        const fadeOut = Math.max(0, 1 - this.age / this.maxAge);
+        const alpha = fadeIn * fadeOut * 0.94;
+
+        const densityWhite = estimateLocalDensity(p.x, p.y);
+        const whitenAmount = clamp(
+          this.shellProximity * 0.72 + densityWhite * 0.58,
+          0,
+          1
+        );
+
+        const hue = 200 + Math.min(this.turnAmount * 1200, 120) + this.hueOffset;
+        const saturation = lerp(85, 0, whitenAmount);
+        const lightness = lerp(
+          54 + Math.min(speed * 12, 22),
+          100,
+          whitenAmount
+        );
+
+        const depthScale = clamp(p.scale * 220, 0.3, 2.2);
+        const size = this.size * depthScale;
+
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(this.heading2D);
+
+        ctx.beginPath();
+        ctx.moveTo(size, 0);
+        ctx.lineTo(-size * 0.8, size * 0.5);
+        ctx.lineTo(-size * 0.8, -size * 0.5);
+        ctx.closePath();
+
+        ctx.fillStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
+        ctx.fill();
+
+        ctx.restore();
+      }
+
+      isDead() {
+        return this.age > this.maxAge;
+      }
+    }
+
+    function spawnBurstFromScreen(screenX, screenY, count = settings.spawnCount) {
+      const localX = screenX - centerX;
+      const localY = centerY - screenY;
+
+      const spawnWorld = vec3(localX * 0.55, localY * 0.55, 0);
+      const spawnWorldRot = rotateX(rotateY(spawnWorld, camera.yaw), camera.pitch);
+
+      for (let i = 0; i < count; i++) {
+        if (particles.length >= settings.maxParticles) {
+          particles.shift();
+        }
+
+        const dir = normalize(vec3(
+          randomRange(-1, 1),
+          randomRange(-1, 1),
+          randomRange(-1, 1)
+        ));
+
+        const speed = randomRange(1.5, 5.2);
+        const pos = add(spawnWorldRot, mul(dir, randomRange(0, 16)));
+        const vel = mul(dir, speed);
+
+        particles.push(new TriangleParticle(pos, vel));
+      }
+    }
+
+    function animate(timeMs) {
+      const time = timeMs * 0.001;
+
+      ctx.fillStyle = `rgba(5, 6, 10, ${settings.trailAmount})`;
+      ctx.fillRect(0, 0, width, height);
+
+      drawSphereGuide();
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.update(time);
+        if (p.isDead()) {
+          particles.splice(i, 1);
+        }
+      }
+
+      particles.sort((a, b) => {
+        const da = a.screen ? a.screen.depth : Infinity;
+        const db = b.screen ? b.screen.depth : Infinity;
+        return db - da;
+      });
+
+      for (const p of particles) {
+        p.draw();
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    canvas.addEventListener("pointerdown", (event) => {
+      dragging = true;
+      lastX = event.clientX;
+      lastY = event.clientY;
+      spawnBurstFromScreen(event.clientX, event.clientY, settings.spawnCount);
+    });
+
+    canvas.addEventListener("pointermove", (event) => {
+      if (!dragging) return;
+
+      const dx = event.clientX - lastX;
+      const dy = event.clientY - lastY;
+
+      camera.yaw += dx * 0.006;
+      camera.pitch += dy * 0.006;
+      camera.pitch = clamp(camera.pitch, -1.3, 1.3);
+
+      lastX = event.clientX;
+      lastY = event.clientY;
+    });
+
+    window.addEventListener("pointerup", () => {
+      dragging = false;
+    });
+
+    canvas.addEventListener("touchstart", (event) => {
+      event.preventDefault();
+      if (event.touches.length > 0) {
+        const t = event.touches[0];
+        dragging = true;
+        lastX = t.clientX;
+        lastY = t.clientY;
+        spawnBurstFromScreen(t.clientX, t.clientY, settings.spawnCount);
+      }
+    }, { passive: false });
+
+    canvas.addEventListener("touchmove", (event) => {
+      event.preventDefault();
+      if (!dragging || event.touches.length === 0) return;
+
+      const t = event.touches[0];
+      const dx = t.clientX - lastX;
+      const dy = t.clientY - lastY;
+
+      camera.yaw += dx * 0.006;
+      camera.pitch += dy * 0.006;
+      camera.pitch = clamp(camera.pitch, -1.3, 1.3);
+
+      lastX = t.clientX;
+      lastY = t.clientY;
+    }, { passive: false });
+
+    window.addEventListener("touchend", () => {
+      dragging = false;
+    });
+
+    window.addEventListener("resize", resize);
+
+    resize();
+    spawnBurstFromScreen(centerX, centerY, 220);
+    animate(0);
+  </script>
+</body>
+</html>
